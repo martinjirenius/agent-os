@@ -145,6 +145,34 @@ code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
 .empty { color: var(--muted); font-style: italic; }
 .slip { color: var(--doing); font-weight: 600; }
 
+/* The map (DAG) ----------------------------------------------------------- */
+.map { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+       padding: .5rem; box-shadow: var(--shadow); }
+.map svg { display: block; max-width: none; }
+.edge { fill: none; stroke: var(--line); stroke-width: 2; }
+.node rect { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+.node .edgeband { stroke: none; }
+.node .nid { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--muted); }
+.node .ntitle { font: 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--fg); }
+.node { cursor: pointer; }
+.node:hover rect:first-of-type { stroke: var(--accent); }
+.node:focus { outline: none; }
+.node:focus rect:first-of-type { stroke: var(--accent); stroke-width: 2; }
+.node.s-landed   .edgeband { fill: var(--landed); }
+.node.s-doing    .edgeband { fill: var(--doing); }
+.node.s-frontier .edgeband { fill: var(--frontier); }
+.node.s-blocked  .edgeband { fill: var(--blocked); }
+.node.s-landed rect:first-of-type {
+  fill: color-mix(in srgb, var(--landed) 10%, var(--bg)); }
+.node.n-here rect:first-of-type {
+  stroke: var(--accent); stroke-width: 2;
+  fill: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
+.row.flash { outline: 2px solid var(--accent); outline-offset: -1px; }
+.legend { display: flex; gap: 1rem; flex-wrap: wrap; color: var(--muted);
+          font-size: .76rem; margin: .5rem 0 0; }
+.legend span { display: flex; align-items: center; gap: .35rem; }
+.dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
 /* Inbox ------------------------------------------------------------------- */
 .item { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
         padding: .65rem .9rem; margin-bottom: .35rem; box-shadow: var(--shadow); }
@@ -171,6 +199,24 @@ JS = """
       root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
     });
   }
+  // Clicking a node on the map drills to that deliverable's row below. The row is a
+  // <details>, so this is an enhancement, not a requirement: with JS off every level is
+  // still reachable by clicking the row itself.
+  function drill(id) {
+    var row = document.querySelector('details.row[data-row="' + id + '"]');
+    if (!row) { return; }
+    row.open = true;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.add('flash');
+    setTimeout(function () { row.classList.remove('flash'); }, 1200);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-node]'), function (n) {
+    n.addEventListener('click', function () { drill(n.getAttribute('data-node')); });
+    n.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); drill(n.getAttribute('data-node')); }
+    });
+  });
+
   var all = document.getElementById('expand');
   if (all) {
     all.addEventListener('click', function () {

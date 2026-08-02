@@ -32,6 +32,7 @@ import checks  # noqa: E402
 import git_ledger  # noqa: E402
 import inbox  # noqa: E402
 import render  # noqa: E402
+import render_dag  # noqa: E402
 import roadmap  # noqa: E402
 
 STATE_LABEL: dict[str, str] = {
@@ -144,7 +145,7 @@ def _row(status: roadmap.Status, proj: roadmap.Projection, ghost: roadmap.Projec
     label = STATE_LABEL.get(status.state, status.state)
     here = '<span class="pill here-tag">you are here</span>' if is_here else ""
     return (
-        '<details class="row">'
+        f'<details class="row" data-row="{render.esc(status.id)}">'
         '<summary>'
         '<span class="chev">&#9656;</span>'
         f'<span class="did">{render.esc(status.id)}</span>'
@@ -156,6 +157,18 @@ def _row(status: roadmap.Status, proj: roadmap.Projection, ghost: roadmap.Projec
         f'<div class="detail">{_detail(status, proj, slip, commits, cards)}</div>'
         "</details>"
     )
+
+
+def _legend() -> str:
+    """Names the four colours once. Without it the map's bands are decoration."""
+    swatches = "".join(
+        f'<span><i class="dot" style="background:var(--{var})"></i>{label}</span>'
+        for var, label in (("landed", "landed"), ("doing", "in progress"),
+                           ("frontier", "frontier — unblocked, not started"),
+                           ("blocked", "blocked by a dependency"))
+    )
+    return (f'<p class="legend">{swatches}</p>'
+            '<p class="sub">columns are dependency depth; click a node to drill to its row</p>')
 
 
 def _here_block(statuses: list[roadmap.Status], depth: int, depth_note: str,
@@ -249,6 +262,9 @@ def build(root: Path, now: datetime.datetime | None = None) -> str:
         '<p class="sub"><button id="theme">theme</button> '
         '<button id="expand">expand all</button></p>',
         _here_block(statuses, depth, depth_note, cards, warnings),
+        "<h2>Map</h2>",
+        render_dag.build(statuses, here_id),
+        _legend(),
         "<h2>Pipeline</h2>",
         '<div class="pipe">',
     ]

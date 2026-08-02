@@ -4,6 +4,7 @@ Run: python3 -m pytest tools/render_roadmap_test.py -q
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -110,6 +111,24 @@ def test_insufficient_velocity_is_stated_not_faked(tmp_path):
     # Two sessions observed, three needed. The page must say so rather than draw a date.
     html = _html(tmp_path)
     assert "insufficient" in html.lower()
+
+
+def test_map_is_on_the_page_with_edges(tmp_path):
+    html = _html(tmp_path)
+    assert 'data-node="D-02"' in html
+    assert 'data-edge="D-01..D-02"' in html
+    assert 'data-edge="D-02..D-03"' in html
+
+
+def test_every_map_node_has_a_row_to_drill_to(tmp_path):
+    # The click handler resolves data-node -> details.row[data-row]. If those two ever drift
+    # apart, clicking a node silently does nothing — the exact absence-reads-as-success shape
+    # this repo keeps getting bitten by, so it is pinned here rather than trusted.
+    html = _html(tmp_path)
+    nodes = set(re.findall(r'data-node="([^"]+)"', html))
+    rows = set(re.findall(r'<details class="row" data-row="([^"]+)"', html))
+    assert nodes, "no map nodes rendered at all"
+    assert nodes == rows
 
 
 def test_page_is_self_contained(tmp_path):
