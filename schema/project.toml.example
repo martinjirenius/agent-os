@@ -1,0 +1,50 @@
+# project.toml — the manifest that specializes generic skills.
+#
+# Skills are byte-identical across projects; this file is what makes /dev, /wrap
+# and checks.py do the right thing here. Forking a skill is never the answer.
+
+[project]
+name = "temporal-splats"
+kind = "research"          # research | app | library | tool
+
+[commands]
+# Every generic skill reaches for these. Absent = that step is skipped, loudly.
+test  = "pytest"
+lint  = "ruff check . && mypy ."
+demo  = "python -m temporal_splats.demo --scene fixtures/tiny"
+debug = "python tools/debug_server.py"
+build = ""
+
+[caps]
+# Lint-enforced. Deviating is a manifest edit, not an argument in a session.
+file_lines        = 500
+claude_md_lines   = 150
+todo_cards        = 10
+wip_cards         = 1
+local_skills      = 3
+excursion_depth   = 3
+excursion_calls   = 25     # per level, before a forced pop
+branch_sessions   = 3      # open longer than this is a rot signal
+escalations       = 2      # per session, before /process-audit trips
+
+[escalation]
+# The closed list. Anything not matching these is decided autonomously and
+# recorded as Chose:. Project-specific additions go here and nowhere else.
+irreversible_external = true
+product_changes       = true
+true_forks            = true
+extra = [
+  # "changing docs/02-math-formulation.md",
+]
+
+[[deliverables]]
+id       = "D-01"
+title    = "Sim pipeline produces a validated dataset manifest"
+depends  = []
+serves   = "mesh from a phone scan"
+
+[[deliverables]]
+id       = "D-02"
+title    = "Model fits static + motion on E1"
+depends  = ["D-01"]
+serves   = "mesh from a phone scan"

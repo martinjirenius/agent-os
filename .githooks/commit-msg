@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Reject commits whose trailers violate the schema — the gate the ledger rests on.
+
+The roadmap, decision inbox, dive profile and closed-card ledger are all generated from
+commit trailers (docs/02-git-model.md). That makes the trailers load-bearing data, and
+load-bearing data needs a gate at write time, not a lint afterwards: an advisory schema is
+correct for six sessions and then quietly develops holes. A typo'd `Serve:` would silently
+drop a commit out of the pipeline forever and nobody would notice — which is why an
+unrecognized trailer key is an error, not a shrug.
+
+Install: git config core.hooksPath .githooks
+
+    .githooks/commit-msg <path-to-COMMIT_EDITMSG>
+    .githooks/commit-msg --selftest
+"""
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+TRAILER_RE = re.compile(r"^([A-Za-z][A-Za-z-]*): *(.*)$")
+
+# Keys the schema defines, plus the ones git and the harness generate themselves.
+KNOWN = {
+    "Session", "Card", "Serves", "Verified", "Disposition", "Reason", "Supersedes",
+    "Tests-first", "Finding", "Decision", "Chose", "Question", "Depth",
+    "Co-Authored-By", "Signed-off-by",
+}
+DISPOSITIONS = {"done", "rejected", "superseded", "obsolete", "deferred"}
+
+# Paths that are prose, not code. Everything else requires a Verified: trailer.
+PROSE_PREFIXES = ("docs/", "backlog/", "schema/")
+PROSE_SUFFIXES = (".md", ".gitignore", ".toml.example")
+
+
+def parse_trailers(message: str) -> dict[str, list[str]]:
+    """Return the trailer block of a commit message as {key: [values]}.
+
+    The trailer block is the final run of `Key: value` lines. Anything above the last
+    blank line separating it is prose and is not inspected.
+    """
+    lines = [ln for ln in message.splitlines() if not ln.startswith("#")]
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    block: list[str] = []
+    for line in reversed(lines):
+        if not line.strip():
+            break
+        if TRAILER_RE.match(line) or line.startswith((" ", "\t")):
+            block.append(line)
+        else:
+            block = []  # prose reached before a blank line: no trailer block
+            break
+
+    trailers: dict[str, list[str]] = {}
+    for line in reversed(block):
+        m = TRAILER_RE.match(line)
+        if m:
+            trailers.setdefault(m.group(1), []).append(m.group(2).strip())
+    return trailers
+
+
+def staged_paths() -> list[str]:
+    """Paths staged for this commit, empty if git cannot be reached."""
+    has_head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"],
+                              capture_output=True).returncode == 0
+    cmd = (["git", "diff", "--cached", "--name-only", "--diff-filter=ACMRT"]
+           if has_head else ["git", "ls-files", "--cached"])
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    return [p for p in r.stdout.splitlines() if p.strip()]
+
+
+def touches_code(paths: list[str]) -> bool:
+    """True if any staged path is code rather than prose."""
+    for p in paths:
+        if p.startswith(PROSE_PREFIXES) or p.endswith(PROSE_SUFFIXES):
+            continue
+        return True
+    return False
+
+
+def _suggest(key: str) -> str:
+    """Nearest known key, for the typo that would otherwise cost a pipeline row."""
+    lowered = key.lower().rstrip("s")
+    for known in KNOWN:
+        if known.lower().rstrip("s") == lowered:
+            return f"  did you mean `{known}:`?"
+    return ""
+
+
+def validate(message: str, paths: list[str]) -> list[str]:
+    """Return a list of schema violations; empty means the commit may land."""
+    subject = next((ln for ln in message.splitlines() if ln.strip()
+                    and not ln.startswith("#")), "")
+    if subject.startswith(("Merge ", "Revert ", "fixup!", "squash!")):
+        return []
+
+    t = parse_trailers(message)
+    errors: list[str] = []
+
+    for key in t:
+        if key not in KNOWN:
+            errors.append(f"unknown trailer `{key}:`{_suggest(key)}")
+
+    if "Session" not in t:
+        errors.append("missing `Session:` — required on every commit (e.g. 2026-08-02-a)")
+
+    if "Card" in t and "Serves" not in t:
+        errors.append("`Card:` without `Serves:` — every card must serve a deliverable, "
+                      "or the work is untraceable to the product")
+
+    if touches_code(paths) and "Verified" not in t:
+        errors.append("code changed but no `Verified:` — say what you ran and what it said")
+
+    for value in t.get("Disposition", []):
+        if value not in DISPOSITIONS:
+            errors.append(f"`Disposition: {value}` is not one of "
+                          f"{', '.join(sorted(DISPOSITIONS))}")
+        elif value != "done" and "Reason" not in t:
+            errors.append(f"`Disposition: {value}` requires `Reason:` — a dropped card "
+                          "without a reason is unqueryable later")
+    return errors
+
+
+def _selftest() -> int:
+    """Fixtures for every rule, so the gate itself is tested rather than trusted."""
+    ok = "Do a thing\n\nSession: 2026-08-02-a\n"
+    cases: list[tuple[str, list[str], bool]] = [
+        (ok, [], True),
+        ("Do a thing\n", [], False),                                    # no Session
+        (ok, ["tools/x.py"], False),                                    # code, no Verified
+        (ok + "Verified: pytest 3 passed\n", ["tools/x.py"], True),
+        (ok + "Card: B-001\n", [], False),                              # Card without Serves
+        (ok + "Card: B-001\nServes: D-01\n", [], True),
+        (ok + "Serve: D-01\n", [], False),                              # the typo that matters
+        (ok + "Disposition: nope\n", [], False),
+        (ok + "Disposition: deferred\n", [], False),                    # needs Reason
+        (ok + "Disposition: deferred\nReason: out of scope\n", [], True),
+        (ok + "Disposition: done\n", [], True),
+        ("Merge branch 'x'\n", ["tools/x.py"], True),                   # merges exempt
+        ("Do a thing\n\nSession: x\nbut this is prose\n", [], False),   # no trailer block
+    ]
+    failures = 0
+    for i, (msg, paths, should_pass) in enumerate(cases):
+        errs = validate(msg, paths)
+        if bool(errs) == should_pass:
+            print(f"FAIL case {i}: expected {'pass' if should_pass else 'reject'}, "
+                  f"got {errs or 'pass'}")
+            failures += 1
+    print(f"{len(cases) - failures}/{len(cases)} cases pass")
+    return 1 if failures else 0
+
+
+def main(argv: list[str]) -> int:
+    if "--selftest" in argv:
+        return _selftest()
+    if len(argv) < 2:
+        print("usage: commit-msg <path-to-message> | --selftest", file=sys.stderr)
+        return 2
+
+    message = Path(argv[1]).read_text(encoding="utf-8")
+    errors = validate(message, staged_paths())
+    if not errors:
+        return 0
+
+    print("\ncommit rejected — trailer schema (docs/02-git-model.md):\n", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    print("\nRequired: `Session:` always; `Card:`+`Serves:` on card work; "
+          "`Verified:` when code changed.\n", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

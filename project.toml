@@ -1,0 +1,76 @@
+# agent-os's own manifest. It is its own first user.
+
+[project]
+name = "agent-os"
+kind = "tool"
+
+[commands]
+test  = "python3 .githooks/commit-msg --selftest && python3 tools/git_ledger.py --selftest"
+lint  = ""                                   # STUB until B-003 lands checks.py
+demo  = ""                                   # STUB until D-07: agent-os init <project>
+debug = "python3 tools/git_ledger.py inbox"
+
+[caps]
+file_lines      = 500
+claude_md_lines = 150
+todo_cards      = 10
+wip_cards       = 1
+local_skills    = 3
+excursion_depth = 3
+excursion_calls = 25
+branch_sessions = 3
+escalations     = 2
+
+[escalation]
+irreversible_external = true
+product_changes       = true
+true_forks            = true
+extra = []
+
+[[deliverables]]
+id = "D-01"
+title = "Git layer — trailer schema, commit-msg gate, ledger, /timetravel"
+depends = []
+serves = "nothing is lost when things are deleted"
+
+[[deliverables]]
+id = "D-02"
+title = "Checks + rot — one command, one PASS/FAIL table, a number that falls"
+depends = ["D-01"]
+serves = "the repo does not rot"
+
+[[deliverables]]
+id = "D-03"
+title = "Core loop skills — /product /dev /wrap /recall /supersede /prune"
+depends = ["D-02"]
+serves = "sessions resume cheaply and end clean"
+
+[[deliverables]]
+id = "D-04"
+title = "Work model — backlog.py, cards, deliverables, DAG traversal"
+depends = ["D-02"]
+serves = "work is traceable to the product"
+
+[[deliverables]]
+id = "D-05"
+title = "Excursion stack — depth discipline and rabbit-hole lints"
+depends = ["D-03", "D-04"]
+serves = "the agent does not disappear down holes"
+
+[[deliverables]]
+id = "D-06"
+title = "Surfaces — roadmap, dive profile, decision inbox, cross-project board"
+depends = ["D-05"]
+serves = "Martin sees what he is getting and when"
+
+[[deliverables]]
+id = "D-07"
+title = "Packaging — plugin manifest and agent-os init"
+depends = ["D-06"]
+serves = "one command installs it into a project"
+
+[[deliverables]]
+id = "D-08"
+title = "Pilot on stockpilot"
+depends = ["D-07"]
+serves = "proven on the worst case, not the easiest"
