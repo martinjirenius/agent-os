@@ -153,6 +153,13 @@ def test_end_to_end_checks_py_runs_against_installed_project(tmp_path: Path) -> 
     steps = init.run_init(repo)
     assert init.exit_code(steps) == 0
 
+    # init installs; /dev starts the session. The gate is run at session end, so the end-to-end
+    # path has to include starting the stack or it models a session that never began.
+    stack_py = Path(__file__).resolve().parent / "stack.py"
+    started = subprocess.run([sys.executable, str(stack_py), "start", "--session", "e2e"],
+                              cwd=repo, capture_output=True, text=True)
+    assert started.returncode == 0, started.stdout + started.stderr
+
     checks_py = Path(__file__).resolve().parent / "checks.py"
     r = subprocess.run([sys.executable, str(checks_py)], cwd=repo,
                         capture_output=True, text=True)

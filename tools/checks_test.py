@@ -41,6 +41,10 @@ def make_fixture(tmp: Path) -> None:
     (tmp / "skills").mkdir()
     (tmp / "tools").mkdir()
     (tmp / "tools" / "main.py").write_text("print('hi')\n")
+    # A healthy project is one mid-session, and a session tracks its depth. Without this the
+    # fixture would assert that an untracked session is healthy — the bug the lint catches.
+    (tmp / ".agent").mkdir(exist_ok=True)
+    (tmp / ".agent" / "stack.json").write_text('{"session": "fixture", "frames": []}')
 
 
 def rows_by_name(tmp: Path, manifest: dict | None = None) -> dict[str, checks.Row]:

@@ -297,6 +297,11 @@ def _selftest() -> int:
         repo = make_git_repo(tmp)
         steps = run_init(repo)
         check("end-to-end: init succeeds before checks.py runs", exit_code(steps) == 0, steps)
+        # init installs; /dev starts the session. Running the gate without that step models a
+        # session that never began, which the tracked-depth lint correctly refuses.
+        stack_py = Path(__file__).resolve().parent / "stack.py"
+        subprocess.run([sys.executable, str(stack_py), "start", "--session", "selftest"],
+                        cwd=repo, capture_output=True, text=True)
         checks_py = Path(__file__).resolve().parent / "checks.py"
         r = subprocess.run([sys.executable, str(checks_py)], cwd=repo,
                             capture_output=True, text=True)

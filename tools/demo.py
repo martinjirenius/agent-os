@@ -44,6 +44,15 @@ def demo(verbose: bool = False) -> int:
                   + again.stdout + again.stderr)
             return 1
 
+        # What /dev does first: start tracking depth. Before this step existed the demo went
+        # straight from install to gate, so it modelled a session that never began — and the
+        # gate passed, which is how the excursion stack shipped and never once ran.
+        started = run(sys.executable, str(TOOLS / "stack.py"), "start",
+                       "--session", "demo-session", cwd=project)
+        if started.returncode != 0:
+            print("FAIL: could not start the session stack\n" + started.stdout + started.stderr)
+            return 1
+
         # The point of the whole deliverable: the REAL tools, not copies, run against the
         # installed project purely by standing in it.
         checks = run(sys.executable, str(TOOLS / "checks.py"), cwd=project)

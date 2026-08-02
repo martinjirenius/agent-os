@@ -251,3 +251,45 @@ def test_add_profile_refuses_a_sha_from_another_repo(tmp_path, monkeypatch):
         git_notes.main(["add-profile", "--commit", foreign, "--stack-path", str(stack_path)])
     assert "not a commit in this repository" in str(exc.value)
     assert _git(repo, "notes", "--ref", git_notes.NOTES_REF, "list").stdout.strip() == ""
+
+
+def test_add_profile_clear_moves_the_stack_to_the_note(tmp_path, monkeypatch):
+    """The live tier exists to BECOME the note. Leaving it behind means the next /dev finds a
+    stack from a finished session and refuses to start — so the flush is a move, not a copy."""
+    repo = _init_repo(tmp_path)
+    sha = _commit(repo, "some work")
+    stack_path = tmp_path / "stack.json"
+    stack_path.write_text(json.dumps(VALID_STACK))
+    monkeypatch.chdir(repo)
+
+    rc = git_notes.main(["add-profile", "--commit", sha, "--stack-path", str(stack_path),
+                          "--clear"])
+    assert rc == 0
+    assert json.loads(_notes_show(repo, sha)) == VALID_STACK
+    assert not stack_path.exists(), "the live stack survived a flush that claimed to clear it"
+
+
+def test_add_profile_without_clear_leaves_the_stack_alone(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    sha = _commit(repo, "some work")
+    stack_path = tmp_path / "stack.json"
+    stack_path.write_text(json.dumps(VALID_STACK))
+    monkeypatch.chdir(repo)
+
+    git_notes.main(["add-profile", "--commit", sha, "--stack-path", str(stack_path)])
+    assert stack_path.exists()
+
+
+def test_add_profile_does_not_clear_when_the_note_write_failed(tmp_path, monkeypatch):
+    """--clear must never delete the only copy of a profile that was not actually recorded."""
+    repo = _init_repo(tmp_path)
+    sha = _commit(repo, "some work")
+    stack_path = tmp_path / "stack.json"
+    stack_path.write_text(json.dumps(VALID_STACK))
+    monkeypatch.chdir(repo)
+
+    git_notes.main(["add-profile", "--commit", sha, "--stack-path", str(stack_path)])
+    with pytest.raises(SystemExit):
+        git_notes.main(["add-profile", "--commit", sha, "--stack-path", str(stack_path),
+                         "--clear"])
+    assert stack_path.exists(), "a refused flush deleted the live stack anyway"

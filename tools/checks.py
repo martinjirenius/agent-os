@@ -170,7 +170,7 @@ def check_excursions(root: Path) -> list[Row]:
         import stack
     except ImportError:
         return []  # stack.py is optional; a project may install checks.py without it
-    return [stack.check_stack_empty(root)]
+    return [stack.check_stack_empty(root), stack.check_stack_tracked(root)]
 
 
 def check_local_skills(root: Path, cap: int) -> Row | None:
@@ -330,6 +330,11 @@ def _make_selftest_fixture(tmp: Path) -> None:
     (tmp / "backlog" / "B-001.md").write_text(
         "---\nid: B-001\ntitle: a card\nstatus: todo\nserves: D-01\nopened: 2026-01-01\n---\nbody\n")
     (tmp / ".claude" / "skills").mkdir(parents=True)
+    # A clean fixture is a project mid-session, so depth is being tracked — without this the
+    # "no FAIL rows" case would assert that an untracked session is clean, which is the exact
+    # bug the tracked-depth lint exists to catch.
+    (tmp / ".agent").mkdir(exist_ok=True)
+    (tmp / ".agent" / "stack.json").write_text('{"session": "fixture", "frames": []}')
     (tmp / "tools").mkdir()
     (tmp / "tools" / "main.py").write_text("print('hi')\n")
 

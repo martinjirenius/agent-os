@@ -241,3 +241,94 @@ def test_stack_written_by_cli_accepted_by_git_notes_add_profile(tmp_path, monkey
 
 def test_selftest_exits_zero():
     assert stack.main(["--selftest"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# start: a session that never dives must still be recordable
+# ---------------------------------------------------------------------------
+
+def test_start_creates_a_depth_zero_stack(tmp_path):
+    """The bug this fixes: the file only came into existence on the first push, so a session
+    that legitimately stayed at depth 0 was indistinguishable from one never tracked at all."""
+    path = tmp_path / ".agent" / "stack.json"
+    stack.start(path, "2026-08-02-c", now="t0")
+    assert path.exists()
+    state = json.loads(path.read_text())
+    assert state["session"] == "2026-08-02-c"
+    assert state["frames"] == []
+
+
+def test_start_is_idempotent_for_the_same_session(tmp_path):
+    path = tmp_path / ".agent" / "stack.json"
+    stack.start(path, "s1", now="t0")
+    stack.push_cmd_free_marker = True
+    stack.start(path, "s1", now="t0")  # re-running /dev must not wipe the session's frames
+    assert json.loads(path.read_text())["session"] == "s1"
+
+
+def test_start_preserves_frames_when_rerun(tmp_path):
+    path = tmp_path / ".agent" / "stack.json"
+    stack.start(path, "s1", now="t0")
+    state = stack.load_stack(path)
+    stack.push(state, "why", "unblocks parent", cap=3, now="t0")
+    stack.save_stack(path, state)
+    stack.start(path, "s1", now="t1")
+    assert len(stack.load_stack(path)["frames"]) == 1, "re-running start ate a live excursion"
+
+
+def test_start_refuses_a_stale_session_naming_the_fix(tmp_path):
+    path = tmp_path / ".agent" / "stack.json"
+    stack.start(path, "2026-08-01-a", now="t0")
+    with pytest.raises(SystemExit) as exc:
+        stack.start(path, "2026-08-02-c", now="t1")
+    msg = str(exc.value)
+    assert "2026-08-01-a" in msg and "--force" in msg
+
+
+def test_start_force_replaces_a_stale_session(tmp_path):
+    path = tmp_path / ".agent" / "stack.json"
+    stack.start(path, "old", now="t0")
+    stack.start(path, "new", now="t1", force=True)
+    assert stack.load_stack(path)["session"] == "new"
+
+
+# ---------------------------------------------------------------------------
+# the lint that would have caught the whole thing
+# ---------------------------------------------------------------------------
+
+def test_check_stack_tracked_fails_when_depth_was_never_measured(tmp_path):
+    row = stack.check_stack_tracked(tmp_path)
+    assert row.status == "FAIL"
+    assert "stack.py start" in row.detail, "the lint must name its own fix"
+
+
+def test_check_stack_tracked_passes_once_started(tmp_path):
+    stack.start(tmp_path / ".agent" / "stack.json", "s1", now="t0")
+    assert stack.check_stack_tracked(tmp_path).status == "PASS"
+
+
+def test_check_stack_tracked_always_emits_a_row(tmp_path):
+    # Absence read as success is the bug that recurred three times; both branches emit.
+    for started in (False, True):
+        if started:
+            stack.start(tmp_path / ".agent" / "stack.json", "s1", now="t0")
+        assert stack.check_stack_tracked(tmp_path).name == "depth tracked this session"
+
+
+# ---------------------------------------------------------------------------
+# max_depth: what makes the Depth: trailer evidence instead of a claim
+# ---------------------------------------------------------------------------
+
+def test_max_depth_counts_closed_frames_too(tmp_path):
+    state = stack.empty_stack("s1")
+    stack.push(state, "q1", "u1", cap=3, now="t0")
+    stack.push(state, "q2", "u2", cap=3, now="t0")
+    stack.pop(state, "answered", None, now="t1")
+    stack.pop(state, "answered", None, now="t1")
+    # Surfaced back to 0, but the session DID reach 2 — that is the number worth reporting.
+    assert stack.open_frames(state) == []
+    assert stack.max_depth(state) == 2
+
+
+def test_max_depth_of_a_quiet_session_is_zero(tmp_path):
+    assert stack.max_depth(stack.empty_stack("s1")) == 0

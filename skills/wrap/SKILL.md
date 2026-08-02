@@ -15,7 +15,8 @@ tools/checks.py                                    # must be all-PASS or /wrap s
 tools/handoff.py render --session <id> \
     --next-action "..." --gotchas "..."            # judgment goes in as flags
 git commit ...                                     # trailers below
-tools/git_notes.py add-profile --commit HEAD       # skip if .agent/stack.json doesn't exist
+tools/stack.py status --max-depth                  # the Depth: trailer value, measured
+tools/git_notes.py add-profile --commit HEAD --clear   # flush the profile, free the stack
 ```
 
 ## Judgment calls this skill makes, not the scripts
@@ -36,10 +37,15 @@ tools/git_notes.py add-profile --commit HEAD       # skip if .agent/stack.json d
   session actually learned, not from the previous handoff's leftovers. The result is
   overwritten, never appended to; keep it inside the line cap by trimming narrative, not by
   adding sections.
-- **A missing `.agent/stack.json` is normal, not a failure.** Until the excursion stack
-  exists in a given project, `add-profile` refuses with "not found" — that is expected
-  degradation, so skip the note and move on rather than reporting the wrap as broken. Once
-  the stack file exists, `add-profile` starts succeeding with no change to this skill.
+- **A missing `.agent/stack.json` is a failed session, not expected degradation.** This skill
+  used to say the opposite, and that sentence is why the excursion stack shipped, passed every
+  gate, and never once ran: no stack meant no note, an empty dive profile, and a `Depth:`
+  trailer nobody measured — all reported as healthy. `/dev` now starts the stack and
+  `checks.py` fails without it, so if `add-profile` says "not found" at /wrap, depth was never
+  tracked this session. Say so in the handoff rather than skipping past it.
+- **The flush is a move.** `--clear` deletes the live stack once the note is written, because
+  the live tier exists to become the note. Skip it and the next `/dev` finds a stack from a
+  finished session and refuses to start.
 - **The commit's trailers, exactly:** `Session:` always — the id already in use this session
   (check `git log` if unsure; /wrap's commit never mints a new one). `Card:` + `Serves:` if a
   card closed here. `Disposition:` on every closed card — `done`, or another value plus
@@ -47,4 +53,6 @@ tools/git_notes.py add-profile --commit HEAD       # skip if .agent/stack.json d
   outside `docs/ backlog/ schema/` or `*.md` — say what you ran and what it said, since the
   commit-msg hook rejects an unverified code change outright rather than warning about it.
   That rejection, if it happens, is the check that /wrap actually did its job — don't route
-  around it by dropping a trailer, fix what it's complaining about.
+  around it by dropping a trailer, fix what it's complaining about. `Depth:` comes from
+  `tools/stack.py status --max-depth`, never from memory — a recalled depth is a claim, and
+  docs/02-git-model.md already refuses to trust self-reported trailers.

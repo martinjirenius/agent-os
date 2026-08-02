@@ -130,6 +130,14 @@ def cmd_add_profile(args: argparse.Namespace) -> int:
     cmd += ["-m", payload, sha]
     ledger_git(*cmd)
     print(f"profile for session {stack['session']} written to {sha[:9]}")
+
+    if args.clear:
+        # The flush is a MOVE, not a copy: the live tier exists to become the note. Leaving
+        # the file behind means the next /dev finds a stack belonging to a finished session
+        # and refuses to start. Only reached once the note is written, so a refused or failed
+        # flush never deletes the only copy of the profile.
+        Path(args.stack_path).unlink()
+        print(f"cleared {args.stack_path} — the profile now lives on the note")
     return 0
 
 
@@ -290,6 +298,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--stack-path", default=DEFAULT_STACK_PATH)
     ap.add_argument("--session", default=None)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--clear", action="store_true",
+                    help="delete the live stack once the note is written (what /wrap does)")
 
     an = sub.add_parser("annotate"); an.set_defaults(fn=cmd_annotate)
     an.add_argument("--sha")

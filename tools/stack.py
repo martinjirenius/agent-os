@@ -146,6 +146,69 @@ def pop(state: dict, outcome: str, note: str | None, now: str) -> tuple[dict, st
     return state, (parent[-1]["question"] if parent else None)
 
 
+def max_depth(state: dict) -> int:
+    """The deepest the session ever went, closed frames included.
+
+    `open_frames` answers "where am I now"; this answers "how deep did this session get",
+    which is the number the `Depth:` trailer claims. Deriving it here is what turns that
+    trailer from a self-report into evidence — docs/02-git-model.md already refuses to trust
+    `Verified:` for the same reason, and ran the tests itself instead.
+    """
+    return max((int(f["depth"]) for f in state.get("frames", [])), default=0)
+
+
+def start(path: Path, session: str, now: str, force: bool = False) -> dict:
+    """Begin tracking depth for `session`, creating the stack at depth 0.
+
+    Before this existed the file was only created by the first `push`, so a session that
+    legitimately stayed at depth 0 produced no file, no note and no profile — indistinguishable
+    from a session where depth was never tracked at all. Every downstream surface then read
+    that absence as "fine". Starting explicitly is what makes a quiet session *recorded* rather
+    than merely silent.
+
+    Re-running for the same session is a no-op that preserves live frames, because /dev may be
+    run more than once. A DIFFERENT session id means a stale stack survived a wrap, which is a
+    rot signal and refuses rather than silently discarding the previous session's frames.
+    """
+    if path.exists():
+        existing = load_stack(path)
+        if existing.get("session") == session:
+            return existing
+        if not force:
+            raise SystemExit(
+                f"{path} belongs to session {existing.get('session')!r}, not {session!r} — a "
+                f"stale stack survived a /wrap, so the previous session's dive profile was "
+                f"never flushed. Recover it with `tools/git_notes.py add-profile --commit "
+                f"<that session's last commit>`, or discard it with --force."
+            )
+    state = empty_stack(session)
+    state["started"] = now
+    save_stack(path, state)
+    return state
+
+
+def check_stack_tracked(root: Path) -> checks.Row:
+    """Lint: depth was actually measured this session. ALWAYS returns a Row.
+
+    The companion to `check_stack_empty`, which asks "is anything left open?" and correctly
+    passes at depth 0 — including when no session ever tracked depth at all. That gap is how
+    the excursion stack shipped, passed every gate, and never once ran: no stack file meant no
+    git note, an empty dive profile, and `roadmap.py` reporting "not measured" while the gate
+    said all-clear.
+    """
+    path = root / DEFAULT_STACK_PATH
+    if path.exists():
+        state = load_stack(path)
+        return checks.Row("depth tracked this session", "PASS",
+                          f"session {state.get('session') or '(unset)'}, "
+                          f"max depth {max_depth(state)}")
+    return checks.Row(
+        "depth tracked this session", "FAIL",
+        f"no {DEFAULT_STACK_PATH} — depth was never measured, so the dive profile will be "
+        f"empty and the Depth: trailer is a guess. Start the session's stack with "
+        f"`tools/stack.py start --session <id>` (/dev does this).")
+
+
 def check_stack_empty(root: Path) -> checks.Row:
     """Lint: no excursion left open. ALWAYS returns a Row, even with no stack file at all.
 
@@ -200,10 +263,23 @@ def cmd_pop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_start(args: argparse.Namespace) -> int:
+    path = _resolve_path(args)
+    state = start(path, args.session or "", now_iso(), force=args.force)
+    print(f"tracking depth for session {state['session'] or '(unset)'} at {path}")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     state = load_stack(_resolve_path(args))
     live = open_frames(state)
-    print(f"session {state['session'] or '(unset)'} — depth {len(live)}")
+    if args.max_depth:
+        # The value /wrap puts in the Depth: trailer, so the trailer is read off the
+        # measurement rather than recalled by the agent.
+        print(max_depth(state))
+        return 0
+    print(f"session {state['session'] or '(unset)'} — depth {len(live)} "
+          f"(max reached {max_depth(state)})")
     for f in live:
         print(f"  {f['depth']}: {f['question']}  (unblocks: {f['unblocks']})")
     return 0
@@ -287,8 +363,16 @@ def main(argv: list[str]) -> int:
     po.add_argument("--note", default=None)
     po.add_argument("--stack-path", default=None)
 
+    sa = sub.add_parser("start"); sa.set_defaults(fn=cmd_start)
+    sa.add_argument("--session", default=None)
+    sa.add_argument("--stack-path", default=None)
+    sa.add_argument("--force", action="store_true",
+                    help="discard a stale stack from a previous session")
+
     st = sub.add_parser("status"); st.set_defaults(fn=cmd_status)
     st.add_argument("--stack-path", default=None)
+    st.add_argument("--max-depth", action="store_true",
+                    help="print only the deepest depth reached — the Depth: trailer value")
 
     args = p.parse_args(argv)
     if args.selftest:
