@@ -2,47 +2,48 @@
 
 Overwritten at the end of every session by `/wrap`. History: `git log -- docs/handoff.md`.
 
-## Last session (2026-08-02, session `2026-08-02-a`)
+## Last session (2026-08-02, session `2026-08-02-b`)
 
-Founded agent-os and landed **D-01's core**: the trailer schema, the rejecting `commit-msg`
-hook, and `tools/git_ledger.py`. Captured the founding conversation into `CLAUDE.md`,
-`WAY-OF-WORKING.md` and `docs/00`–`05`. Seeded cards B-001…B-006 and the D-01…D-08 DAG in
-`project.toml`. Checks all-PASS: selftests 13/13 and 1/1, caps within limits.
+Ran lead-and-delegate: Opus lead, Sonnet workers, review before each land. **D-01 through D-07
+all landed** — B-001…B-010 closed, backlog empty. `main` clean, `checks.py` 11 rows all-PASS,
+172 tests, rot 0. `demo` is no longer a stub: `tools/demo.py` installs agent-os into a fresh
+repo and runs the real un-copied gate there, so the product claim is a test.
 
 ## Repo state
 
-Branch `main`, clean. `core.hooksPath = .githooks`, so the gate is live for every commit here.
+Branch `main`, clean. 13 tools, 3 skills (`dev`, `wrap`, `timetravel`), `.claude-plugin/`
+manifest. Nothing installed anywhere — `~/.claude` and all five sibling projects untouched.
 
 ## Next action
 
-**B-001 — `/timetravel`**, and nothing before it: the no-back-compat rule is written but not yet
-*safe*, because deletion is only licensed once retrieval is proven.
-
-Next session runs **lead-and-delegate** (Opus lead, Sonnet workers, review before each new
-spawn). Cards are dependency-ordered into waves that can go in parallel:
-
-- wave 1 — B-001, B-002 (D-01)
-- wave 2 — B-003, B-004 (D-02, needs wave 1)
-- wave 3 — B-005, B-006 (D-04/D-03, needs wave 2)
-
-**Workers do not commit.** The lead reviews and lands the work, so the ledger stays clean and
-review is the thing that gates a commit rather than a formality after it. Every delegation
-prompt must carry the card, its `Serves:` deliverable, and the acceptance check — a cold worker
-has none of this session's context, only what the repo says.
+**D-08, pilot on stockpilot** — the only unlanded deliverable, and the one that tests the
+system against a real codebase instead of its author. **Blocked on Martin**: it writes outside
+this repo, which was explicitly out of scope while he was away.
 
 ## Open questions / pending decisions
 
-None blocking. Two not needed until D-07: plugin install via local marketplace or path, and
-where `~/projects/index.html` lives. Martin is away — decide under the escalation policy and
-record `Chose:`.
+- **Ratify or revert this session's `Chose:` items** — `tools/inbox.py --since 2026-08-02-b`.
+  Silence ratifies. One real `Question:` is on `961cf4e` (B-010).
+- **D-07 is code-complete but not installed.** Registering the plugin in `~/.claude` needs a
+  go-ahead. Until then no project actually references these skills.
+- Three files sit within 20 lines of the 500 cap: `rot.py` 492, `checks.py` 487,
+  `backlog.py` 480. The next substantive edit to any of them trips the gate. Split before
+  extending, characterization test first.
 
 ## Gotchas
 
-- **The repo obeys its own rules.** No `Session:` → rejected. `Card:` requires `Serves:`.
-  Anything outside `docs/ backlog/ schema/` or `*.md` requires `Verified:`. Debug the gate with
-  `python3 .githooks/commit-msg --selftest`.
-- `lint` and `demo` in `project.toml` are **marked stubs**, empty until B-003 and D-07.
-- `git_ledger.py deleted` is **untested against real data** — nothing has been deleted yet.
-  B-001 closing is its first real exercise; verify it there rather than assuming.
-- Existing projects are untouched. stockpilot is the pilot, at D-08.
-- Founding plan: `~/.claude/plans/quiet-hugging-penguin.md`.
+- **Absence read as success — four bugs of this shape in one session.** A lint returning no
+  row for missing input; card lints vanishing when `backlog/` was deleted; `git rev-parse`
+  accepting a sha that does not exist; a module name shadowing the stdlib so a missing file
+  failed as `AttributeError`. Every one reported healthy while doing nothing. This deserves a
+  standing lint, not four individual fixes — it is the most valuable finding of the session.
+- **A test that drives a git-running tool must `chdir` into its fixture.** One did not and
+  wrote a note into this repo's real `refs/notes`, annotating a commit not in this repo.
+  Cleaned; `add-profile`/`annotate` now use `rev-parse --verify <rev>^{commit}`.
+- **Parallel workers must have declared file ownership.** Two workers editing
+  `git_ledger.py` collided mid-flight in wave 1. Waves 2+ used an explicit read-only list and
+  had no collisions; workers reported wiring needs instead of doing them.
+- Velocity data is 2 sessions, so `roadmap.py` refuses to project and says so. Do not
+  "fix" that by lowering the threshold.
+- `skills_never_fired` and dead-code-from-demo are still `unimplemented`, deliberately not
+  scored 0.
