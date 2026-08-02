@@ -2,41 +2,47 @@
 
 Overwritten at the end of every session by `/wrap`. History: `git log -- docs/handoff.md`.
 
-## Last session (2026-08-02)
+## Last session (2026-08-02, session `2026-08-02-a`)
 
 Founded agent-os and landed **D-01's core**: the trailer schema, the rejecting `commit-msg`
-hook, and `tools/git_ledger.py`. Captured the full design from the founding conversation into
-`CLAUDE.md`, `WAY-OF-WORKING.md` and `docs/00`–`05` — the diagnosis, the four axioms, the
-constitution, the git model, the work model, the surfaces and the governance tiers. Seeded six
-cards and the D-01…D-08 deliverable DAG in `project.toml`.
+hook, and `tools/git_ledger.py`. Captured the founding conversation into `CLAUDE.md`,
+`WAY-OF-WORKING.md` and `docs/00`–`05`. Seeded cards B-001…B-006 and the D-01…D-08 DAG in
+`project.toml`. Checks all-PASS: selftests 13/13 and 1/1, caps within limits.
 
 ## Repo state
 
-Branch `main`, first commit. Clean. `core.hooksPath` is set to `.githooks`, so the gate is live
-for anyone committing here.
+Branch `main`, clean. `core.hooksPath = .githooks`, so the gate is live for every commit here.
 
 ## Next action
 
-**B-001 — `/timetravel`.** First move: a thin skill over `git_ledger.py deleted` plus
-`git show <sha>^:<path>`, covering three cases — find a deleted file, see a file as of a date,
-and what did this look like before decision D-nnn.
+**B-001 — `/timetravel`**, and nothing before it: the no-back-compat rule is written but not yet
+*safe*, because deletion is only licensed once retrieval is proven.
 
-Do this before anything else. The no-back-compat rule is written but not yet *safe*: deletion
-is only licensed once retrieval is proven, and nothing else in the DAG should land first.
+Next session runs **lead-and-delegate** (Opus lead, Sonnet workers, review before each new
+spawn). Cards are dependency-ordered into waves that can go in parallel:
+
+- wave 1 — B-001, B-002 (D-01)
+- wave 2 — B-003, B-004 (D-02, needs wave 1)
+- wave 3 — B-005, B-006 (D-04/D-03, needs wave 2)
+
+**Workers do not commit.** The lead reviews and lands the work, so the ledger stays clean and
+review is the thing that gates a commit rather than a formality after it. Every delegation
+prompt must carry the card, its `Serves:` deliverable, and the acceptance check — a cold worker
+has none of this session's context, only what the repo says.
 
 ## Open questions / pending decisions
 
-None blocking. Two things Martin has not yet been asked and does not need to be until D-07:
-whether the plugin installs via a local marketplace or a path, and where `~/projects/index.html`
-should live.
+None blocking. Two not needed until D-07: plugin install via local marketplace or path, and
+where `~/projects/index.html` lives. Martin is away — decide under the escalation policy and
+record `Chose:`.
 
 ## Gotchas
 
-- **The repo obeys its own rules.** A commit without `Session:` is rejected. `Card:` requires
-  `Serves:`. Touching anything outside `docs/ backlog/ schema/` or `*.md` requires `Verified:`.
-  Run `python3 .githooks/commit-msg --selftest` (13 cases) if the gate seems wrong.
-- `lint` and `demo` in `project.toml` are **marked stubs**, empty on purpose until B-003 and
-  D-07. They are visible stubs, not silent fakes.
-- Existing projects are **untouched**. Nothing has been migrated; D-08 is the pilot, and
-  stockpilot is the target because its rot is in docs, which is the real disease.
-- The plan this came from: `~/.claude/plans/quiet-hugging-penguin.md`.
+- **The repo obeys its own rules.** No `Session:` → rejected. `Card:` requires `Serves:`.
+  Anything outside `docs/ backlog/ schema/` or `*.md` requires `Verified:`. Debug the gate with
+  `python3 .githooks/commit-msg --selftest`.
+- `lint` and `demo` in `project.toml` are **marked stubs**, empty until B-003 and D-07.
+- `git_ledger.py deleted` is **untested against real data** — nothing has been deleted yet.
+  B-001 closing is its first real exercise; verify it there rather than assuming.
+- Existing projects are untouched. stockpilot is the pilot, at D-08.
+- Founding plan: `~/.claude/plans/quiet-hugging-penguin.md`.
