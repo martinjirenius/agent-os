@@ -131,13 +131,6 @@ def test_check_serves_fails_on_malformed_card_without_crashing(tmp_path: Path) -
     assert "B-100" in row.detail
 
 
-def test_lints_return_none_when_no_backlog_dir(tmp_path: Path) -> None:
-    (tmp_path / "project.toml").write_text("[caps]\nwip_cards = 1\ntodo_cards = 10\n")
-    assert backlog.check_wip_cards(tmp_path, cap=1) is None
-    assert backlog.check_todo_cards(tmp_path, cap=10) is None
-    assert backlog.check_serves(tmp_path, set()) is None
-
-
 # --- next_id / new -------------------------------------------------------
 
 def test_next_id_empty_backlog_is_b001(tmp_path: Path) -> None:
@@ -261,3 +254,18 @@ def test_selftest_cli() -> None:
                         capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "cases pass" in r.stdout
+
+
+def test_lints_still_report_when_backlog_dir_is_absent(tmp_path: Path) -> None:
+    """Closing the last card deletes backlog/ (git tracks no empty dirs). The rows must
+    survive that, or the gate reports all-pass while the lints are not running at all."""
+    (tmp_path / "project.toml").write_text(
+        '[caps]\nwip_cards = 1\ntodo_cards = 10\n\n[[deliverables]]\nid = "D-01"\ntitle = "t"\n')
+    assert not (tmp_path / "backlog").exists()
+    rows = [
+        backlog.check_wip_cards(tmp_path, 1),
+        backlog.check_todo_cards(tmp_path, 10),
+        backlog.check_serves(tmp_path, {"D-01"}),
+    ]
+    assert all(r is not None for r in rows), rows
+    assert all(r.status == "PASS" for r in rows), rows

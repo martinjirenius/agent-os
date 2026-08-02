@@ -127,10 +127,8 @@ def deliverable_ids(manifest: dict) -> set[str]:
 
 
 def check_wip_cards(root: Path, cap: int) -> checks.Row | None:
-    """WIP <= cap. checks.Row-compatible; None means "no backlog/ here" (nothing to check)."""
+    """WIP <= cap. checks.Row-compatible. An absent backlog/ means zero cards, NOT no row."""
     backlog_dir = root / "backlog"
-    if not backlog_dir.exists():
-        return None
     name = f"wip_cards <= {cap}"
     cards = load_cards(backlog_dir)
     errs = _errors(cards)
@@ -146,10 +144,8 @@ def check_wip_cards(root: Path, cap: int) -> checks.Row | None:
 
 
 def check_todo_cards(root: Path, cap: int) -> checks.Row | None:
-    """todo <= cap. checks.Row-compatible; None means "no backlog/ here"."""
+    """todo <= cap. checks.Row-compatible. An absent backlog/ means zero cards, NOT no row."""
     backlog_dir = root / "backlog"
-    if not backlog_dir.exists():
-        return None
     name = f"todo_cards <= {cap}"
     cards = load_cards(backlog_dir)
     errs = _errors(cards)
@@ -167,11 +163,16 @@ def check_serves(root: Path, deliverable_ids_set: set[str]) -> checks.Row | None
     """Every card `serves:` a deliverable that exists in project.toml's `[[deliverables]]`.
 
     The load-bearing lint (docs/02-git-model.md "Serves: is the load-bearing one") — checks.py
-    deliberately left this unimplemented because it needs the full card parser above.
+    delegates it here because it needs the full card parser above.
+
+    These three lints always return a Row, even with no backlog/ directory at all. They
+    briefly returned None in that case, and closing the last card in this repo deleted the
+    directory (git does not track empty ones), so all three rows silently disappeared and the
+    gate reported "all checks pass" while the load-bearing lint was not running. Axiom 1: an
+    index that is silently incomplete is worse than none, because it answers "no such thing"
+    with false confidence. Zero cards is a PASS you can see, not an absence of evidence.
     """
     backlog_dir = root / "backlog"
-    if not backlog_dir.exists():
-        return None
     name = "cards serve an existing deliverable"
     cards = load_cards(backlog_dir)
     errs = _errors(cards)
