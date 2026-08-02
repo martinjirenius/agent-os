@@ -1,0 +1,9 @@
+{
+  "name": "agent-os",
+  "displayName": "agent-os",
+  "description": "The shared operating system for Martin's projects: core loop skills (/dev /wrap /timetravel ...) and the tools/ scripts they call, parameterized per project by project.toml. Skills here are referenced by every installed project, never copied (docs/05-schema.md).",
+  "author": {
+    "name": "Martin Jirenius",
+    "email": "martin.jirenius@gmail.com"
+  }
+}
