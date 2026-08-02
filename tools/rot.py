@@ -354,9 +354,9 @@ def compute_rot(root: str | os.PathLike[str] = ".") -> RotReport:
             "than scored 0 (a silent 0 would look identical to 'no stale skills')."),
         _signal_unimplemented(
             "dead_code_unreachable_from_demo",
-            "needs D-07: project.toml's `demo` command is currently a stub, so there is no "
-            "working demo path to compute reachability from — reported unimplemented rather "
-            "than scored 0 for the same reason."),
+            "the `demo` command now runs (tools/demo.py), but tracing which modules it "
+            "actually reaches needs import/coverage instrumentation that does not exist yet "
+            "— reported unimplemented rather than scored 0 for the same reason."),
     ]
     total = sum(s.weighted for s in signals if s.status == "scored")
     return RotReport(root=str(root), total=total, signals=signals)
