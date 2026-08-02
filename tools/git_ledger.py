@@ -33,7 +33,8 @@ class Commit:
         return self.trailers.get(key, [default])[0]
 
 
-def _git(*args: str) -> str:
+def git_out(*args: str) -> str:
+    """Run git and return stdout; the one place a subprocess is spawned (reused by timetravel.py)."""
     r = subprocess.run(["git", *args], capture_output=True, text=True)
     if r.returncode != 0:
         raise SystemExit(f"git {' '.join(args)} failed: {r.stderr.strip()}")
@@ -46,7 +47,7 @@ def load(since: str | None = None) -> list[Commit]:
     args = ["log", f"--pretty=format:{fmt}", "--date=short"]
     if since:
         args.append(f"--since={since}")
-    raw = _git(*args)
+    raw = git_out(*args)
 
     commits: list[Commit] = []
     for chunk in raw.split(SEP + "\n"):
@@ -63,7 +64,7 @@ def load(since: str | None = None) -> list[Commit]:
     return commits
 
 
-def _match(c: Commit, key: str, value: str) -> bool:
+def match_trailer(c: Commit, key: str, value: str) -> bool:
     return any(value in v for v in c.trailers.get(key, []))
 
 
@@ -72,7 +73,7 @@ def cmd_query(args: argparse.Namespace) -> int:
     for key, value in (("Card", args.card), ("Serves", args.serves),
                        ("Session", args.session)):
         if value:
-            commits = [c for c in commits if _match(c, key, value)]
+            commits = [c for c in commits if match_trailer(c, key, value)]
     if not commits:
         print("no commits match")
         return 1
@@ -88,7 +89,7 @@ def cmd_closed(args: argparse.Namespace) -> int:
     """Cards that were closed — reconstructed from history, since the files are deleted."""
     rows = [c for c in load(args.since) if c.trailers.get("Disposition")]
     if args.disposition:
-        rows = [c for c in rows if _match(c, "Disposition", args.disposition)]
+        rows = [c for c in rows if match_trailer(c, "Disposition", args.disposition)]
     if not rows:
         print("no closed cards")
         return 1
@@ -117,22 +118,51 @@ def cmd_inbox(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_deleted(args: argparse.Namespace) -> int:
-    """Everything ever removed — the archive that replaces docs/archive/."""
-    fmt = f"%H{SEP}%ad{SEP}%s"
-    cmd = ["log", "--diff-filter=D", "--name-only", "--date=short",
-           f"--pretty=format:{fmt}"]
-    if args.path:
-        cmd += ["--", args.path]
-    out = _git(*cmd)
+@dataclass
+class Deletion:
+    date: str
+    path: str
+    sha: str
+    subject: str
+
+
+def _parse_deleted_output(out: str) -> list[Deletion]:
+    """Pure parser for `git log --diff-filter=D --name-only` output — split out so it is
+    testable without a subprocess, and because it hides a real gotcha: `str.splitlines()`
+    treats the SEP byte (0x1e, ASCII Record Separator) as a line boundary in its own right,
+    so it silently shreds the `sha SEP date SEP subject` header into three separate "lines"
+    before the loop ever sees it. Splitting on plain `"\\n"` is required, not cosmetic.
+    """
     sha = date = subject = ""
-    for line in out.splitlines():
+    result: list[Deletion] = []
+    for line in out.split("\n"):
         if SEP in line:
             sha, date, subject = line.split(SEP)
         elif line.strip():
-            print(f"{date}  {line}")
-            print(f"            removed in {sha[:9]} — {subject}")
-            print(f"            restore: git show {sha[:9]}^:{line}")
+            result.append(Deletion(date, line, sha, subject))
+    return result
+
+
+def deleted(path: str | None = None) -> list[Deletion]:
+    """Every file ever removed, most recent deletion first — the data cmd_deleted prints and
+    the data /timetravel's find-a-deleted-file mode replays."""
+    fmt = f"%H{SEP}%ad{SEP}%s"
+    cmd = ["log", "--diff-filter=D", "--name-only", "--date=short", f"--pretty=format:{fmt}"]
+    if path:
+        cmd += ["--", path]
+    return _parse_deleted_output(git_out(*cmd))
+
+
+def cmd_deleted(args: argparse.Namespace) -> int:
+    """Everything ever removed — the archive that replaces docs/archive/."""
+    rows = deleted(args.path)
+    if not rows:
+        print(f"no files removed{f' matching {args.path}' if args.path else ''}")
+        return 1
+    for d in rows:
+        print(f"{d.date}  {d.path}")
+        print(f"            removed in {d.sha[:9]} — {d.subject}")
+        print(f"            restore: git show {d.sha[:9]}^:{d.path}")
     return 0
 
 
@@ -148,16 +178,38 @@ def cmd_sessions(args: argparse.Namespace) -> int:
 
 
 def _selftest() -> int:
+    cases = 0
+    failures = 0
+
     sample = "abc123\x1e2026-08-02\x1eDo a thing\x1eSession: s1\nCard: B-001\nServes: D-01\x1e"
     parts = sample.split(SEP)
     trailers: dict[str, list[str]] = {}
     for line in parts[3].splitlines():
         k, v = line.split(": ", 1)
         trailers.setdefault(k, []).append(v)
-    assert trailers["Card"] == ["B-001"], trailers
-    assert trailers["Serves"] == ["D-01"], trailers
-    print("1/1 cases pass")
-    return 0
+    cases += 1
+    if trailers.get("Card") != ["B-001"] or trailers.get("Serves") != ["D-01"]:
+        print(f"FAIL trailer-block parse: {trailers}")
+        failures += 1
+
+    # Regression: str.splitlines() treats 0x1e (our SEP) as a line boundary in its own
+    # right, so a naive `out.splitlines()` shreds "sha SEP date SEP subject" into three
+    # bare lines before the SEP-based split ever runs. _parse_deleted_output must split on
+    # "\n" only. Reproduces the exact shape `git log --name-only --pretty=format:...` emits:
+    # one header line, then zero or more bare filename lines.
+    raw = f"deadbeef{SEP}2026-08-02{SEP}remove foo\nfoo.txt\nbar/baz.txt\n"
+    rows = _parse_deleted_output(raw)
+    cases += 1
+    expected = [
+        Deletion("2026-08-02", "foo.txt", "deadbeef", "remove foo"),
+        Deletion("2026-08-02", "bar/baz.txt", "deadbeef", "remove foo"),
+    ]
+    if rows != expected:
+        print(f"FAIL _parse_deleted_output: got {rows}, want {expected}")
+        failures += 1
+
+    print(f"{cases - failures}/{cases} cases pass")
+    return 1 if failures else 0
 
 
 def main(argv: list[str]) -> int:
