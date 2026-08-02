@@ -49,6 +49,25 @@ DEFAULT_STACK_PATH = ".agent/stack.json"
 REQUIRED_FRAME_KEYS = {"depth", "question", "unblocks", "opened", "closed", "outcome"}
 
 
+def resolve_commit_or_die(rev: str) -> str:
+    """Resolve <rev> to a commit that EXISTS in the repo we are standing in.
+
+    Plain `git rev-parse <40-hex>` echoes the input straight back without checking that the
+    object exists, so a sha belonging to a different repository resolved "successfully" and
+    a note was attached to it — polluting this repo's refs/notes with an annotation on a
+    commit it does not contain. `--verify <rev>^{commit}` is what actually checks.
+    """
+    r = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        raise SystemExit(
+            f"{rev!r} is not a commit in this repository — notes attach to commits that exist "
+            f"here. Check you are in the right repo (`git rev-parse --show-toplevel`) and that "
+            f"the sha is one of its commits."
+        )
+    return r.stdout.strip()
+
+
 def _note_exists(sha: str) -> bool:
     r = subprocess.run(
         ["git", "notes", "--ref", NOTES_REF, "show", sha],
@@ -95,7 +114,7 @@ def cmd_add_profile(args: argparse.Namespace) -> int:
             f"{stack['session']!r} — pass the matching session id or omit --session."
         )
 
-    sha = ledger_git("rev-parse", args.commit).strip()
+    sha = resolve_commit_or_die(args.commit)
     payload = json.dumps(stack, indent=2, sort_keys=True)
 
     if _note_exists(sha) and not args.force:
@@ -117,7 +136,7 @@ def cmd_add_profile(args: argparse.Namespace) -> int:
 def _resolve_commit(args: argparse.Namespace) -> str:
     """Resolve the annotate target: a raw --sha, or a ledger lookup by --card/--serves."""
     if args.sha:
-        return ledger_git("rev-parse", args.sha).strip()
+        return resolve_commit_or_die(args.sha)
 
     if not (args.card or args.serves):
         raise SystemExit(

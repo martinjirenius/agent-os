@@ -164,6 +164,15 @@ def check_cards(root: Path, caps: dict, manifest: dict) -> list[Row]:
     return [r for r in rows if r is not None]
 
 
+def check_excursions(root: Path) -> list[Row]:
+    """The excursion-stack lint, delegated to stack.py — an unpopped dive is a lost thread."""
+    try:
+        import stack
+    except ImportError:
+        return []  # stack.py is optional; a project may install checks.py without it
+    return [stack.check_stack_empty(root)]
+
+
 def check_local_skills(root: Path, cap: int) -> Row | None:
     """Count PROJECT-LOCAL skills only — `.claude/skills/`, not the plugin payload.
 
@@ -276,6 +285,7 @@ def build_rows(root: Path, manifest: dict) -> list[Row]:
         if row is not None:
             rows.append(row)
     rows.extend(check_cards(root, caps, manifest))
+    rows.extend(check_excursions(root))
     rows.append(check_compat_markers(root))
     rot_row = check_rot(root)
     if rot_row is not None:

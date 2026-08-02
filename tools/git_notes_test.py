@@ -231,3 +231,23 @@ def test_configure_push_configures_refspec_when_remote_exists(tmp_path, monkeypa
 def test_selftest_exits_zero():
     rc = git_notes.main(["--selftest"])
     assert rc == 0
+
+
+def test_add_profile_refuses_a_sha_from_another_repo(tmp_path, monkeypatch):
+    """A 40-hex sha from a DIFFERENT repo must not get a note attached here.
+
+    `git rev-parse <40-hex>` echoes its input back without checking the object exists, so this
+    silently polluted the real repo's refs/notes with an annotation on a commit it did not
+    contain. Caught when a fixture test ran without chdir'ing into its own repo.
+    """
+    repo = _init_repo(tmp_path)
+    _commit(repo, "some work")
+    stack_path = tmp_path / "stack.json"
+    stack_path.write_text(json.dumps(VALID_STACK))
+    monkeypatch.chdir(repo)
+
+    foreign = "fee93a1675afaeec1332a98eac39ad47f1578cf6"
+    with pytest.raises(SystemExit) as exc:
+        git_notes.main(["add-profile", "--commit", foreign, "--stack-path", str(stack_path)])
+    assert "not a commit in this repository" in str(exc.value)
+    assert _git(repo, "notes", "--ref", git_notes.NOTES_REF, "list").stdout.strip() == ""
