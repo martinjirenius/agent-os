@@ -5,8 +5,8 @@ name = "agent-os"
 kind = "tool"
 
 [commands]
-test  = "python3 .githooks/commit-msg --selftest && python3 tools/git_ledger.py --selftest && python3 tools/timetravel.py --selftest && python3 tools/git_notes.py --selftest && python3 -m pytest tools/ -q"
-lint  = ""                                   # STUB until B-003 lands checks.py
+test  = "python3 .githooks/commit-msg --selftest && python3 tools/git_ledger.py --selftest && python3 tools/timetravel.py --selftest && python3 tools/git_notes.py --selftest && python3 tools/checks.py --selftest && python3 tools/rot.py --selftest && python3 -m pytest tools/ -q"
+lint  = ""                                   # STUB: no project-specific linter yet. NOT checks.py — checks.py runs this, so that recurses.
 demo  = ""                                   # STUB until D-07: agent-os init <project>
 debug = "python3 tools/git_ledger.py inbox"
 
