@@ -109,8 +109,8 @@ def test_wip_cards_over_cap_fails(tmp_path: Path) -> None:
 def test_local_skills_over_cap_fails(tmp_path: Path) -> None:
     make_fixture(tmp_path)
     for name in ("a", "b", "c", "d"):
-        sd = tmp_path / "skills" / name
-        sd.mkdir()
+        sd = tmp_path / ".claude" / "skills" / name
+        sd.mkdir(parents=True)
         (sd / "SKILL.md").write_text("x\n")
     rows = rows_by_name(tmp_path)
     assert rows["local_skills <= 3"].status == "FAIL"

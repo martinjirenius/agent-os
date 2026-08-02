@@ -42,6 +42,10 @@ rewrite the body rather than appending to it.
 - Core and standard skills come from the **plugin** — referenced, never copied. Forked skills
   drift; there are already three diverging copies of `/wrap` in the wild.
 - A project may add **3 local skills**. A fourth means one dies or it earns promotion.
+- **Where they live**, since only one of these is capped: the plugin payload is `skills/` in
+  agent-os (it is the OS, authoring the core roster); project-local skills are
+  `.claude/skills/` and are what `local_skills` counts. Counting the payload against the
+  local budget would cap the OS at 3 core skills while the roster below lists twelve.
 - **Retirement**: `/prune` deletes skills that have not fired in N sessions. The rule "doing
   something twice earns a skill" has needed a counterpart from the start.
 - **Promotion**: anything wanted by two projects moves up into the OS and deduplicates. The

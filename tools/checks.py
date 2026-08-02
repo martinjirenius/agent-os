@@ -180,7 +180,14 @@ def check_wip_cards(root: Path, cap: int) -> Row | None:
 
 
 def check_local_skills(root: Path, cap: int) -> Row | None:
-    skills = root / "skills"
+    """Count PROJECT-LOCAL skills only — `.claude/skills/`, not the plugin payload.
+
+    docs/05-schema.md: core and standard skills come from the plugin, "referenced, never
+    copied", and a project may add 3 of its own. agent-os's own `skills/` directory is that
+    plugin payload (it is authoring the OS), so counting it here would cap the OS itself at
+    3 core skills while its published roster lists twelve.
+    """
+    skills = root / ".claude" / "skills"
     if not skills.exists():
         return None
     name = f"local_skills <= {cap}"
@@ -326,7 +333,7 @@ def _make_selftest_fixture(tmp: Path) -> None:
     (tmp / "docs" / "00-product.md").write_text("ok\n")
     (tmp / "backlog").mkdir()
     (tmp / "backlog" / "B-001.md").write_text("---\nid: B-001\nstatus: todo\n---\nbody\n")
-    (tmp / "skills").mkdir()
+    (tmp / ".claude" / "skills").mkdir(parents=True)
     (tmp / "tools").mkdir()
     (tmp / "tools" / "main.py").write_text("print('hi')\n")
 
@@ -401,7 +408,7 @@ def _selftest() -> int:
         tmp = Path(d)
         _make_selftest_fixture(tmp)
         for name in ("a", "b", "c", "d"):
-            sd = tmp / "skills" / name
+            sd = tmp / ".claude" / "skills" / name
             sd.mkdir()
             (sd / "SKILL.md").write_text("x\n")
         rows = {r.name: r for r in build_rows(tmp, load_manifest(tmp / "project.toml"))}
