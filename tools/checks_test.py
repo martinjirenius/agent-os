@@ -31,12 +31,13 @@ def make_fixture(tmp: Path) -> None:
         'todo_cards = 10\n'
         'wip_cards = 1\n'
         'local_skills = 3\n'
+        '\n[[deliverables]]\nid = "D-01"\ntitle = "t"\n'
     )
     (tmp / "CLAUDE.md").write_text("# x\n" * 5)
     (tmp / "docs").mkdir()
     (tmp / "docs" / "00-product.md").write_text("ok\n")
     (tmp / "backlog").mkdir()
-    (tmp / "backlog" / "B-001.md").write_text("---\nid: B-001\nstatus: todo\n---\nbody\n")
+    (tmp / "backlog" / "B-001.md").write_text("---\nid: B-001\ntitle: c\nstatus: todo\nserves: D-01\nopened: 2026-01-01\n---\nbody\n")
     (tmp / "skills").mkdir()
     (tmp / "tools").mkdir()
     (tmp / "tools" / "main.py").write_text("print('hi')\n")
@@ -93,17 +94,41 @@ def test_todo_cards_over_cap_fails(tmp_path: Path) -> None:
     make_fixture(tmp_path)
     for i in range(2, 13):
         (tmp_path / "backlog" / f"B-{i:03}.md").write_text(
-            f"---\nid: B-{i:03}\nstatus: todo\n---\nbody\n")
+            f"---\nid: B-{i:03}\ntitle: c\nstatus: todo\n"
+            f"serves: D-01\nopened: 2026-01-01\n---\nbody\n")
     rows = rows_by_name(tmp_path)
     assert rows["todo_cards <= 10"].status == "FAIL"
 
 
 def test_wip_cards_over_cap_fails(tmp_path: Path) -> None:
     make_fixture(tmp_path)
-    (tmp_path / "backlog" / "B-002.md").write_text("---\nid: B-002\nstatus: doing\n---\nbody\n")
-    (tmp_path / "backlog" / "B-003.md").write_text("---\nid: B-003\nstatus: doing\n---\nbody\n")
+    (tmp_path / "backlog" / "B-002.md").write_text("---\nid: B-002\ntitle: c\nstatus: doing\nserves: D-01\nopened: 2026-01-01\n---\nbody\n")
+    (tmp_path / "backlog" / "B-003.md").write_text("---\nid: B-003\ntitle: c\nstatus: doing\nserves: D-01\nopened: 2026-01-01\n---\nbody\n")
     rows = rows_by_name(tmp_path)
     assert rows["wip_cards <= 1"].status == "FAIL"
+
+
+def test_card_serving_a_nonexistent_deliverable_fails(tmp_path: Path) -> None:
+    """The load-bearing lint: work that ladders up to nothing must not survive a check run.
+
+    Delegated to backlog.py, so this also proves the delegation is actually wired up rather
+    than silently returning no rows.
+    """
+    make_fixture(tmp_path)
+    (tmp_path / "backlog" / "B-002.md").write_text(
+        "---\nid: B-002\ntitle: orphan\nstatus: todo\nserves: D-99\nopened: 2026-01-01\n---\nx\n")
+    rows = rows_by_name(tmp_path)
+    row = rows["cards serve an existing deliverable"]
+    assert row.status == "FAIL", rows
+    assert "B-002" in row.detail and "D-99" in row.detail
+
+
+def test_malformed_card_fails_rather_than_being_skipped(tmp_path: Path) -> None:
+    """A card the parser cannot read is drift, not a no-op — the regex version skipped it."""
+    make_fixture(tmp_path)
+    (tmp_path / "backlog" / "B-002.md").write_text("no frontmatter at all\n")
+    rows = rows_by_name(tmp_path)
+    assert any(r.status == "FAIL" for r in rows.values()), rows
 
 
 def test_local_skills_over_cap_fails(tmp_path: Path) -> None:

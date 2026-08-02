@@ -14,10 +14,10 @@ into exit codes: file_lines, claude_md_lines, todo_cards, wip_cards, local_skill
 closed docs/ schema, and a compat-marker grep. Caps are read from `[caps]` in
 project.toml — never hardcoded — so raising a cap is a manifest edit, not a code change.
 
-Card-level lints that need to cross-reference project.toml's `[[deliverables]]` (every
-card `Serves:` a real deliverable) are deliberately NOT here — that needs a card parser,
-which is B-005's territory (backlog.py). This module only counts `status:` frontmatter,
-which is trivial and needed for the todo/wip caps.
+Card-level lints are delegated to backlog.py, which owns the card parser — including the
+load-bearing one, that every card `serves:` a deliverable which actually exists in
+project.toml. Both modules are optional to each other: a project may install either alone
+and the missing rows simply do not appear.
 
     tools/checks.py                # run every check for the project rooted here-or-above
     tools/checks.py --selftest
@@ -143,40 +143,25 @@ def check_claude_md_lines(root: Path, cap: int) -> Row | None:
     return Row(name, "PASS")
 
 
-def _card_status(p: Path) -> str | None:
-    """The `status:` frontmatter value of a backlog card, or None if unparseable."""
-    parts = p.read_text(errors="ignore").split("---")
-    if len(parts) < 3:
-        return None
-    m = re.search(r"^status:\s*(\S+)", parts[1], re.MULTILINE)
-    return m.group(1) if m else None
+def check_cards(root: Path, caps: dict, manifest: dict) -> list[Row]:
+    """The card lints, delegated to backlog.py — one authority per topic (axiom 4).
 
-
-def check_todo_cards(root: Path, cap: int) -> Row | None:
-    backlog = root / "backlog"
-    if not backlog.exists():
-        return None
-    name = f"todo_cards <= {cap}"
-    todo = [p for p in backlog.glob("*.md") if _card_status(p) == "todo"]
-    if len(todo) > cap:
-        return Row(name, "FAIL",
-                    f"{len(todo)} todo cards, cap is {cap} — close or delete cards before "
-                    "opening more (WAY-OF-WORKING.md 'There is no icebox')")
-    return Row(name, "PASS")
-
-
-def check_wip_cards(root: Path, cap: int) -> Row | None:
-    backlog = root / "backlog"
-    if not backlog.exists():
-        return None
-    name = f"wip_cards <= {cap}"
-    wip = [p for p in backlog.glob("*.md") if _card_status(p) == "doing"]
-    if len(wip) > cap:
-        names = ", ".join(p.stem for p in wip)
-        return Row(name, "FAIL",
-                    f"{len(wip)} cards marked doing ({names}), WIP cap is {cap} — finish "
-                    "or park one before starting another")
-    return Row(name, "PASS")
+    This module briefly had its own regex-over-frontmatter version of the todo/wip counts.
+    backlog.py has a real card parser, so it also catches the malformed card the regex
+    silently skipped, and it can check the load-bearing lint the regex could not: that every
+    card `serves:` a deliverable that actually exists in project.toml. Two counters that
+    disagree about what a card is would be exactly the drift this repo exists to prevent.
+    """
+    try:
+        import backlog
+    except ImportError:
+        return []  # backlog.py is optional; a project may install checks.py without it
+    rows = [
+        backlog.check_wip_cards(root, caps["wip_cards"]),
+        backlog.check_todo_cards(root, caps["todo_cards"]),
+        backlog.check_serves(root, backlog.deliverable_ids(manifest)),
+    ]
+    return [r for r in rows if r is not None]
 
 
 def check_local_skills(root: Path, cap: int) -> Row | None:
@@ -285,13 +270,12 @@ def build_rows(root: Path, manifest: dict) -> list[Row]:
     rows.append(check_file_lines(root, caps["file_lines"]))
     for row in (
         check_claude_md_lines(root, caps["claude_md_lines"]),
-        check_todo_cards(root, caps["todo_cards"]),
-        check_wip_cards(root, caps["wip_cards"]),
         check_local_skills(root, caps["local_skills"]),
         check_doc_schema(root),
     ):
         if row is not None:
             rows.append(row)
+    rows.extend(check_cards(root, caps, manifest))
     rows.append(check_compat_markers(root))
     rot_row = check_rot(root)
     if rot_row is not None:
@@ -327,12 +311,14 @@ def _make_selftest_fixture(tmp: Path) -> None:
         'todo_cards = 10\n'
         'wip_cards = 1\n'
         'local_skills = 3\n'
+        '\n[[deliverables]]\nid = "D-01"\ntitle = "t"\n'
     )
     (tmp / "CLAUDE.md").write_text("# x\n" * 5)
     (tmp / "docs").mkdir()
     (tmp / "docs" / "00-product.md").write_text("ok\n")
     (tmp / "backlog").mkdir()
-    (tmp / "backlog" / "B-001.md").write_text("---\nid: B-001\nstatus: todo\n---\nbody\n")
+    (tmp / "backlog" / "B-001.md").write_text(
+        "---\nid: B-001\ntitle: a card\nstatus: todo\nserves: D-01\nopened: 2026-01-01\n---\nbody\n")
     (tmp / ".claude" / "skills").mkdir(parents=True)
     (tmp / "tools").mkdir()
     (tmp / "tools" / "main.py").write_text("print('hi')\n")
