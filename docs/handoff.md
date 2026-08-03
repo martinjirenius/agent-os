@@ -2,48 +2,38 @@
 
 Overwritten at the end of every session by `/wrap`. History: `git log -- docs/handoff.md`.
 
-## Last session (2026-08-02, session `2026-08-02-b`)
+## Last session (2026-08-02, session `2026-08-02-c`)
 
-Ran lead-and-delegate: Opus lead, Sonnet workers, review before each land. **D-01 through D-07
-all landed** — B-001…B-010 closed, backlog empty. `main` clean, `checks.py` 11 rows all-PASS,
-172 tests, rot 0. `demo` is no longer a stub: `tools/demo.py` installs agent-os into a fresh
-repo and runs the real un-copied gate there, so the product claim is a test.
+- B-011: out/roadmap.html — the one page Martin opens [B-011, done]
+- B-012: the map — deliverables as a DAG, not a list of rows [B-012, done]
+- B-013: depth was never measured — wire the excursion stack into the loop [B-013, done]
 
 ## Repo state
 
-Branch `main`, clean. 13 tools, 3 skills (`dev`, `wrap`, `timetravel`), `.claude-plugin/`
-manifest. Nothing installed anywhere — `~/.claude` and all five sibling projects untouched.
+Branch `main`, clean. 17 tools, 3 skills, 213 tests, gate 12/12, rot 0.
 
 ## Next action
 
-**D-08, pilot on stockpilot** — the only unlanded deliverable, and the one that tests the
-system against a real codebase instead of its author. **Blocked on Martin**: it writes outside
-this repo, which was explicitly out of scope while he was away.
+Cross-project `~/projects/index.html` plus the dive-profile HTML — the two pieces of D-06 still unbuilt while it reads `landed`. The board needs no new data; the dive profile has a real note to render as of this session.
 
 ## Open questions / pending decisions
 
-- **Ratify or revert this session's `Chose:` items** — `tools/inbox.py --since 2026-08-02-b`.
-  Silence ratifies. One real `Question:` is on `961cf4e` (B-010).
-- **D-07 is code-complete but not installed.** Registering the plugin in `~/.claude` needs a
-  go-ahead. Until then no project actually references these skills.
-- Three files sit within 20 lines of the 500 cap: `rot.py` 492, `checks.py` 487,
-  `backlog.py` 480. The next substantive edit to any of them trips the gate. Split before
-  extending, characterization test first.
+- Chose: the view imports the model and computes nothing — a second landed/frontier or trailer parse would be an axiom-4 defect
+- Chose: sessions-out on a shared axis, not calendar dates — roadmap.py already refused to fabricate cadence and the page must not undo that
+- Chose: inbox embedded in roadmap.html rather than its own page — "one page" is the product criterion
+- Chose: dive flame graph and the cross-project board deferred to their own cards, not bundled into this landing
+- Chose: inline SVG over a chart library — self-contained, scales, every node is a real DOM element, and it renders with JS off
+- Chose: rows packed in project.toml declaration order rather than reordered for prettier edges — the author's reading order outranks cosmetics
+- Chose: edge keys use `..` not `->` — `>` escapes to `&gt;` in an attribute and makes edges un-greppable in the generated page
+- Chose: FAIL not INFO for untracked depth — the soft option keeps the silent lie, and the whole defect is that absence read as success
+- Chose: demo.py and the init/checks fixtures now start a stack — a fixture that omits it asserts an untracked session is healthy, which is the bug
+- Chose: /dev refuses on a stale stack rather than overwriting — a surviving stack means the previous session's profile was never flushed, and --force would discard the only copy
 
 ## Gotchas
 
-- **Absence read as success — four bugs of this shape in one session.** A lint returning no
-  row for missing input; card lints vanishing when `backlog/` was deleted; `git rev-parse`
-  accepting a sha that does not exist; a module name shadowing the stdlib so a missing file
-  failed as `AttributeError`. Every one reported healthy while doing nothing. This deserves a
-  standing lint, not four individual fixes — it is the most valuable finding of the session.
-- **A test that drives a git-running tool must `chdir` into its fixture.** One did not and
-  wrote a note into this repo's real `refs/notes`, annotating a commit not in this repo.
-  Cleaned; `add-profile`/`annotate` now use `rev-parse --verify <rev>^{commit}`.
-- **Parallel workers must have declared file ownership.** Two workers editing
-  `git_ledger.py` collided mid-flight in wave 1. Waves 2+ used an explicit read-only list and
-  had no collisions; workers reported wiring needs instead of doing them.
-- Velocity data is 2 sessions, so `roadmap.py` refuses to project and says so. Do not
-  "fix" that by lowering the threshold.
-- `skills_never_fired` and dead-code-from-demo are still `unimplemented`, deliberately not
-  scored 0.
+- `checks.py` is 492/500 lines. The next substantive edit trips the cap — split first, characterization test first.
+- **Every `Depth:` trailer before `199e030` is a claim, not a measurement.** The uniform `Depth: 1` is a typing habit. Real data starts with this session's note.
+- **Absence-read-as-success has now recurred four times**, most recently inside the lint meant to catch depth problems. The three prior fixes were all local, which is why it came back. A standing lint for the pattern is a work-model call, not a session one.
+- **D-06 reads `landed` while two of its four surfaces are unbuilt.** The same false-completion logic marked D-03 landed with four skills missing: an empty backlog reads as completeness because done cards are deleted.
+- The plugin is still not registered in `~/.claude`, so `/dev` and `/wrap` are run by hand every session.
+
