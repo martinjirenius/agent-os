@@ -1,0 +1,18 @@
+{
+  "fired": [
+    "dev",
+    "wrap"
+  ],
+  "frames": [
+    {
+      "closed": "2026-08-05T18:54:23+00:00",
+      "depth": 1,
+      "opened": "2026-08-05T18:53:37+00:00",
+      "outcome": "answered: count modules referenced by NOTHING (static closure from declared entry points \u2014 project.toml commands, hooks.json, SKILL.md citations \u2014 following imports), not modules unreached by the traced demo. The demo trace proves reachability, not liveness: 16 of 33 modules here are reached only by other skills' scripts, so scoring that would peg rot permanently and rot.py's own doctrine says a permanently red row goes unread. The static count is 2 (render_board.py, render_roadmap.py, reached by nothing but their own tests) \u2014 a real finding and a number that can fall. Signal renamed to match what it measures.",
+      "question": "what count makes dead_code_unreachable_from_demo a real rot signal, given prune.py proves reachability rather than liveness?",
+      "unblocks": "B-020 cannot wire the row until the count is defined: 16 of 33 modules are unreached by the demo but reached by skills' scripts, so len(compute_unreached()) would peg the score permanently and rot.py's own doctrine says a permanently red row goes unread"
+    }
+  ],
+  "session": "2026-08-05-d",
+  "started": "2026-08-05T18:39:07+00:00"
+}
