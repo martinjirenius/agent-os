@@ -4,3 +4,5 @@
   "session": "2026-08-06-b",
   "started": "2026-08-06T18:45:38+00:00"
 }
+
+Wrong on the mechanism, and it mattered: this handoff said 'the plugin cache is 4 commits behind again — this session's tools/ edits are not what the process runs'. Measured 2026-08-08 (B-031), tools/ edits ARE what runs. The harness exports CLAUDE_PLUGIN_ROOT=<the working tree> for a directory-source marketplace, and scripts resolve by path at call time. What the cache snapshot gap actually costs is stale skill TEXT, which is frozen at process start and needs a restart, not an update. The advice given here — 'claude plugin update then a full restart' — was right for the wrong reason, and the restart was the load-bearing half.
