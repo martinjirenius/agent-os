@@ -1,0 +1,15 @@
+{
+  "fired": [],
+  "frames": [
+    {
+      "closed": "2026-08-09T12:39:11+00:00",
+      "depth": 1,
+      "opened": "2026-08-09T12:28:47+00:00",
+      "outcome": "answered: retention = require Finding: trailer on a done-close in evidence-producing projects, reusing the existing trailer schema instead of a new file store or a report-existence guard",
+      "question": "what does 'retention that survives /prune' mean concretely for backlog.py close in an evidence-producing project \u2014 a new retained file, or something else \u2014 given docs/02-git-model.md already defines a Finding: trailer ledger queried by /recall",
+      "unblocks": "B-040 item 2 implementation"
+    }
+  ],
+  "session": "2026-08-09-b",
+  "started": "2026-08-09T12:26:29+00:00"
+}
